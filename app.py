@@ -15,8 +15,7 @@ st.set_page_config(
 
 st.title("Überprüfbare Risiko-Prognosen im CSRA")
 st.caption(
-    "Demonstrator zur strukturierten Erfassung, Historisierung und "
-    "Bewertung probabilistischer Risiko-Prognosen im Sinne der Bachelorarbeit."
+    "Ich bin noch nicht ganz fertig, habe versucht erstmal mich auf das Prognoseformat zu konzentrieren"
 )
 
 # =================================================
