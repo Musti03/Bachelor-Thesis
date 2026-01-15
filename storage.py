@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import List
+from typing import List, Optional, Any
 from datetime import datetime
 
 from models import RiskForecast
@@ -9,15 +9,26 @@ from models import RiskForecast
 DATA_FILE = Path("forecasts.json")
 
 
-def _serialize_datetime(value):
+# Hilfsfunktionen
+def _serialize_datetime(value: Optional[datetime]) -> Optional[str]:
     if isinstance(value, datetime):
         return value.isoformat()
-    return value
+    return None if value is None else value
+
+
+def _parse_datetime(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    return datetime.fromisoformat(value)
 
 
 def forecast_to_dict(forecast: RiskForecast) -> dict:
+    """
+    Wandelt ein RiskForecast-Objekt in ein JSON-serialisierbares Dictionary um.
+    """
     return {
         "forecast_id": forecast.forecast_id,
+        "forecast_name": forecast.forecast_name,
         "author": forecast.author,
         "team": forecast.team,
         "event_description": forecast.event_description,
@@ -33,41 +44,65 @@ def forecast_to_dict(forecast: RiskForecast) -> dict:
 
 
 def dict_to_forecast(data: dict) -> RiskForecast:
+    """
+    Rekonstruiert ein RiskForecast-Objekt aus einem gespeicherten Dictionary.
+
+    Abwärtskompatibilität:
+    - ältere Dateien könnten `forecast_title` statt `forecast_name` haben
+    - oder gar keinen Namen besitzen
+    """
+    # Name-Fallback: forecast_name -> forecast_title -> Default
+    raw_name = data.get("forecast_name") or data.get("forecast_title")
+    forecast_name = (raw_name or "").strip() or "Unbenannte Prognose"
+
+    author = (data.get("author") or "").strip() or None
+    team = (data.get("team") or "").strip() or None
+    rationale = data.get("rationale")
+
+    outcome_raw: Any = data.get("outcome")
+    outcome = int(outcome_raw) if outcome_raw in (0, 1, "0", "1") else None
+
     return RiskForecast(
         forecast_id=data["forecast_id"],
-        author=data.get("author", "unbekannt"),
-        team=data.get("team"),
-        event_description=data["event_description"],
-        event_criteria=data["event_criteria"],
-        forecast_timestamp=datetime.fromisoformat(data["forecast_timestamp"]),
-        forecast_horizon_start=datetime.fromisoformat(data["forecast_horizon_start"]),
-        forecast_horizon_end=datetime.fromisoformat(data["forecast_horizon_end"]),
-        probability=data["probability"],
-        rationale=data.get("rationale"),
-        outcome=data.get("outcome"),
-        evaluation_timestamp=(
-            datetime.fromisoformat(data["evaluation_timestamp"])
-            if data.get("evaluation_timestamp")
-            else None
-        ),
+        forecast_name=forecast_name,
+        author=author,
+        team=team,
+        event_description=(data.get("event_description") or "").strip(),
+        event_criteria=(data.get("event_criteria") or "").strip(),
+        forecast_timestamp=_parse_datetime(data.get("forecast_timestamp")) or datetime.utcnow(),
+        forecast_horizon_start=_parse_datetime(data.get("forecast_horizon_start")) or datetime.utcnow(),
+        forecast_horizon_end=_parse_datetime(data.get("forecast_horizon_end")) or datetime.utcnow(),
+        probability=float(data["probability"]),
+        rationale=(rationale.strip() if isinstance(rationale, str) and rationale.strip() else None),
+        outcome=outcome,
+        evaluation_timestamp=_parse_datetime(data.get("evaluation_timestamp")),
     )
 
 
-
+# Öffentliche API
 def load_forecasts() -> List[RiskForecast]:
+    """
+    Lädt alle gespeicherten Prognosen aus der persistenten JSON-Datei.
+    """
     if not DATA_FILE.exists():
         return []
 
     with DATA_FILE.open("r", encoding="utf-8") as f:
         raw_data = json.load(f)
 
-    return [dict_to_forecast(item) for item in raw_data]
+    # robust: falls Datei leer/kaputt ist, lieber nicht crashen
+    if not isinstance(raw_data, list):
+        return []
+
+    return [dict_to_forecast(item) for item in raw_data if isinstance(item, dict)]
 
 
 def save_forecast(forecast: RiskForecast) -> None:
     """
-    Speichert eine NEUE Prognose.
-    Bestehende Prognosen bleiben unverändert.
+    Speichert eine neue Prognose persistent.
+
+    Bestehende Prognosen werden bewusst nicht überschrieben,
+    um Nachvollziehbarkeit/Historisierung zu gewährleisten.
     """
     forecasts = load_forecasts()
     forecasts.append(forecast)
@@ -77,7 +112,7 @@ def save_forecast(forecast: RiskForecast) -> None:
 def save_all_forecasts(forecasts: List[RiskForecast]) -> None:
     """
     Speichert den vollständigen Systemzustand aller Prognosen.
-    Wird z. B. nach der Bewertung (Outcome-Setzung) verwendet.
+    (z.B. nach Outcome-Setzung)
     """
     with DATA_FILE.open("w", encoding="utf-8") as f:
         json.dump(

@@ -4,9 +4,7 @@ from models import RiskForecast
 from storage import load_forecasts, save_forecast, save_all_forecasts
 from scoring import brier_score, aggregate_brier_scores
 
-# =================================================
 # Seiteneinstellungen
-# =================================================
 
 st.set_page_config(
     page_title="Überprüfbare Risiko-Prognosen im CSRA",
@@ -14,13 +12,16 @@ st.set_page_config(
 )
 
 st.title("Überprüfbare Risiko-Prognosen im CSRA")
-st.caption(
-    "Ich bin noch nicht ganz fertig, habe versucht erstmal mich auf das Prognoseformat zu konzentrieren"
+
+st.info(
+    "Dieses Prognoseformat ist  "
+    "ausschließlich für klar überprüfbare Ja/Nein-Ereignisse gedacht.\n\n"
+    "Beispiel: »Tritt dieser Sicherheitsvorfall bis zum 30.06. ein – ja oder nein?«\n\n"
+    "Bitte formulieren Sie Prognosen so, dass nach Ablauf des Zeitraums "
+    "eindeutig festgestellt werden kann, ob das Ereignis eingetreten ist."
 )
 
-# =================================================
 # Neue Prognose anlegen
-# =================================================
 
 st.header("Neue Risiko-Prognose anlegen")
 
@@ -29,16 +30,23 @@ with st.form("create_forecast", clear_on_submit=True):
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("Metadaten (nicht bewertungsrelevant)")
+        st.subheader("Metadaten")
+        forecast_name = st.text_input(
+            "Prognose-Name (optional)",
+            help="Dient nur der Übersicht, nicht der Bewertung."
+        )
         author = st.text_input("Urheber / Analyst *")
         team = st.text_input("Team (optional)")
 
         st.subheader("Prognose")
         event_description = st.text_input(
-            "Beschreibung des prognostizierten Ereignisses *"
+            "Beschreibung des prognostizierten Ereignisses *",
+            placeholder="z. B. Unbefugter Zugriff auf System X"
         )
+
         event_criteria = st.text_input(
-            "Kriterien für den Ereigniseintritt *"
+            "Kriterien für den Ereigniseintritt *",
+            placeholder="z. B. Vorfall wird im Incident-Management-System dokumentiert"
         )
 
     with col2:
@@ -59,7 +67,10 @@ with st.form("create_forecast", clear_on_submit=True):
             step=0.01
         )
 
-    rationale = st.text_area("Begründung (optional)")
+    rationale = st.text_area(
+        "Begründung (optional)",
+        help="Hat keinen Einfluss auf die Bewertung."
+    )
 
     submitted = st.form_submit_button("Prognose speichern")
 
@@ -70,6 +81,7 @@ with st.form("create_forecast", clear_on_submit=True):
             st.error("Ende des Prognosehorizonts muss nach dem Beginn liegen.")
         else:
             forecast = RiskForecast.create(
+                forecast_name=forecast_name if forecast_name else None,
                 author=author,
                 team=team if team else None,
                 event_description=event_description,
@@ -89,9 +101,7 @@ with st.form("create_forecast", clear_on_submit=True):
 
 st.divider()
 
-# =================================================
 # Gespeicherte Prognosen
-# =================================================
 
 st.header("Gespeicherte Prognosen")
 
@@ -108,17 +118,16 @@ active = [
     if f.forecast_horizon_end >= now
 ]
 
-# -------------------------------------------------
 # Abgelaufene Prognosen – Überprüfung
-# -------------------------------------------------
 
-st.subheader("Abgelaufene Prognosen (zur Überprüfung)")
+st.subheader("Abgelaufene Prognosen (Überprüfung möglich)")
 
 if not expired:
     st.info("Keine abgelaufenen Prognosen zur Überprüfung.")
 else:
     for f in expired:
-        with st.expander(f"Prognose {f.forecast_id}"):
+        title = f.forecast_name or f.forecast_id
+        with st.expander(f"Prognose: {title}"):
 
             st.write(f"**Urheber:** {f.author}")
             if f.team:
@@ -145,9 +154,7 @@ else:
                 save_all_forecasts(forecasts)
                 st.success("Outcome gespeichert.")
 
-# -------------------------------------------------
 # Aktive Prognosen
-# -------------------------------------------------
 
 st.subheader("Aktive Prognosen")
 
@@ -155,7 +162,8 @@ if not active:
     st.info("Keine aktiven Prognosen.")
 else:
     for f in active:
-        with st.expander(f"Prognose {f.forecast_id}"):
+        title = f.forecast_name or f.forecast_id
+        with st.expander(f"Prognose: {title}"):
 
             st.write(f"**Urheber:** {f.author}")
             if f.team:
@@ -172,11 +180,14 @@ else:
 
 st.divider()
 
-# =================================================
-# Bewertung & Aggregation
-# =================================================
+# Exemplarische Bewertung
 
-st.header("Bewertung der Prognosen")
+st.header("Exemplarische Bewertung der Prognosen")
+
+st.caption(
+    "Die folgenden Auswertungen dienen ausschließlich der Demonstration, "
+    "dass Prognosen im vorgeschlagenen Format quantitativ bewertbar sind."
+)
 
 evaluated = [f for f in forecasts if f.outcome is not None]
 
@@ -184,14 +195,15 @@ if not evaluated:
     st.info("Noch keine bewerteten Prognosen vorhanden.")
 else:
     for f in evaluated:
+        title = f.forecast_name or f.forecast_id
         bs = brier_score(f.probability, f.outcome)
-        with st.expander(f"Prognose {f.forecast_id}"):
+        with st.expander(f"Prognose: {title}"):
             st.write(f"**Urheber:** {f.author}")
             if f.team:
                 st.write(f"**Team:** {f.team}")
             st.write(f"**Brier Score:** {bs:.3f}")
 
-    st.subheader("Aggregierte Brier Scores (Durchschnitt)")
+    st.subheader("Optionale aggregierte Auswertung (Demonstration)")
 
     st.markdown("**Nach Urheber:**")
     scores_author = aggregate_brier_scores(evaluated, by="author")
