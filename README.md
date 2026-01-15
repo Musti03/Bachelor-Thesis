@@ -5,6 +5,14 @@ Bachelorarbeit entwickelte **maschinenlesbare Prognoseformat** zur
 Überprüfbarkeit von Risiko-Prognosen im Cyber Security Risk Assessment (CSRA).
 
 ---
+## Code mit Docker testen:
+docker build -t csra-prognose .
+docker run -p 8501:8501 csra-prognose
+
+Dann kann man im Browser testen:
+
+http://localhost:8501
+---
 
 ## Zielsetzung
 
