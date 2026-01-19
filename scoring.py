@@ -13,19 +13,48 @@ def brier_score(probability: float, outcome: int) -> float:
     return (probability - outcome) ** 2
 
 
+def is_brier_applicable(forecast: RiskForecast) -> bool:
+    """
+    Prüft, ob eine Prognose gemäß dem konzeptionellen Modell
+    quantitativ mittels Brier Score bewertet werden darf.
+    """
+
+    # Bewertung nur auf Ebene E3
+    if forecast.comparison_level != "E3":
+        return False
+
+    # Qualitative Prognosen sind nicht binär bewertbar
+    if forecast.forecast_type == "PT4":
+        return False
+
+    # Outcome muss beobachtbar sein
+    if forecast.outcome is None:
+        return False
+
+    # Wahrscheinlichkeit muss vorhanden sein
+    if forecast.probability is None:
+        return False
+
+    # Häufigkeitsbasierte Outcomes benötigen eine Schwelle
+    if forecast.outcome_class == "O2" and not forecast.threshold_definition:
+        return False
+
+    return True
+
+
 def evaluate_forecasts(
     forecasts: List[RiskForecast]
 ) -> List[Dict[str, float]]:
     """
-    Berechnet Brier Scores für alle bewertbaren Prognosen.
+    Berechnet Brier Scores für alle zulässig bewertbaren Prognosen.
 
-    Diese Funktion dient ausschließlich der exemplarischen Evaluation
+    Die Funktion dient ausschließlich der exemplarischen Evaluation
     des Prognoseformats und nicht der Leistungsbewertung einzelner Personen.
     """
     results: List[Dict[str, float]] = []
 
     for forecast in forecasts:
-        if forecast.outcome is None:
+        if not is_brier_applicable(forecast):
             continue
 
         results.append(
@@ -45,15 +74,13 @@ def mean_brier_score(
     forecasts: List[RiskForecast]
 ) -> Optional[float]:
     """
-    Berechnet den durchschnittlichen Brier Score über alle bewerteten Prognosen.
-
-    Der Mittelwert dient lediglich als aggregierte Kennzahl zur Illustration
-    der quantitativen Auswertbarkeit des Prognoseformats.
+    Berechnet den durchschnittlichen Brier Score über alle
+    zulässig bewerteten Prognosen.
     """
     scores = [
         brier_score(f.probability, f.outcome)
         for f in forecasts
-        if f.outcome is not None
+        if is_brier_applicable(f)
     ]
 
     if not scores:
@@ -70,15 +97,14 @@ def aggregate_brier_scores(
     Aggregiert durchschnittliche Brier Scores nach einem Attribut
     (z. B. 'author' oder 'team').
 
-    Diese Funktion ist optional und dient ausschließlich der Demonstration,
-    dass aggregierte Auswertungen auf Basis des Prognoseformats möglich sind.
-    Sie stellt keine Bewertung oder Rangordnung von Prognostizierenden dar.
+    Aggregationen erfolgen ausschließlich über Prognosen,
+    die die Voraussetzungen für eine quantitative Bewertung erfüllen.
     """
     scores: Dict[str, float] = {}
     counts: Dict[str, int] = {}
 
     for forecast in forecasts:
-        if forecast.outcome is None:
+        if not is_brier_applicable(forecast):
             continue
 
         key = getattr(forecast, by, None)

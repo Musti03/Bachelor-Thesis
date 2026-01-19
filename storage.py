@@ -31,13 +31,28 @@ def forecast_to_dict(forecast: RiskForecast) -> dict:
         "forecast_name": forecast.forecast_name,
         "author": forecast.author,
         "team": forecast.team,
+
+        # Kernfelder
+        "forecast_type": forecast.forecast_type,
+        "outcome_class": forecast.outcome_class,
+        "comparison_level": forecast.comparison_level,
+
         "event_description": forecast.event_description,
         "event_criteria": forecast.event_criteria,
+
         "forecast_timestamp": _serialize_datetime(forecast.forecast_timestamp),
         "forecast_horizon_start": _serialize_datetime(forecast.forecast_horizon_start),
         "forecast_horizon_end": _serialize_datetime(forecast.forecast_horizon_end),
+
         "probability": forecast.probability,
         "rationale": forecast.rationale,
+
+        # Transformations-Metadaten
+        "normalization_applied": forecast.normalization_applied,
+        "normalization_assumption": forecast.normalization_assumption,
+        "threshold_definition": forecast.threshold_definition,
+
+        # Bewertung
         "outcome": forecast.outcome,
         "evaluation_timestamp": _serialize_datetime(forecast.evaluation_timestamp),
     }
@@ -48,10 +63,10 @@ def dict_to_forecast(data: dict) -> RiskForecast:
     Rekonstruiert ein RiskForecast-Objekt aus einem gespeicherten Dictionary.
 
     Abwärtskompatibilität:
-    - ältere Dateien könnten `forecast_title` statt `forecast_name` haben
-    - oder gar keinen Namen besitzen
+    - ältere Dateien enthalten neue Modellfelder noch nicht
     """
-    # Name-Fallback: forecast_name -> forecast_title -> Default
+
+    # Name-Fallback
     raw_name = data.get("forecast_name") or data.get("forecast_title")
     forecast_name = (raw_name or "").strip() or "Unbenannte Prognose"
 
@@ -67,16 +82,40 @@ def dict_to_forecast(data: dict) -> RiskForecast:
         forecast_name=forecast_name,
         author=author,
         team=team,
+
+        # --- neue Modellfelder ---
+        forecast_type=data.get("forecast_type", "PT1"),
+        outcome_class=data.get("outcome_class", "O1"),
+        comparison_level=data.get("comparison_level", "E1"),
+
+        normalization_applied=bool(data.get("normalization_applied", False)),
+        normalization_assumption=data.get("normalization_assumption"),
+        threshold_definition=data.get("threshold_definition"),
+
+        # --- Kern ---
         event_description=(data.get("event_description") or "").strip(),
         event_criteria=(data.get("event_criteria") or "").strip(),
-        forecast_timestamp=_parse_datetime(data.get("forecast_timestamp")) or datetime.utcnow(),
-        forecast_horizon_start=_parse_datetime(data.get("forecast_horizon_start")) or datetime.utcnow(),
-        forecast_horizon_end=_parse_datetime(data.get("forecast_horizon_end")) or datetime.utcnow(),
+
+        forecast_timestamp=_parse_datetime(
+            data.get("forecast_timestamp")
+        ) or datetime.utcnow(),
+
+        forecast_horizon_start=_parse_datetime(
+            data.get("forecast_horizon_start")
+        ) or datetime.utcnow(),
+
+        forecast_horizon_end=_parse_datetime(
+            data.get("forecast_horizon_end")
+        ) or datetime.utcnow(),
+
         probability=float(data["probability"]),
         rationale=(rationale.strip() if isinstance(rationale, str) and rationale.strip() else None),
+
+        # --- Bewertung ---
         outcome=outcome,
         evaluation_timestamp=_parse_datetime(data.get("evaluation_timestamp")),
     )
+
 
 
 # Öffentliche API
