@@ -1,6 +1,6 @@
 from typing import Optional
 
-from models import RiskForecast
+from csra_forecast.models import RiskForecast
 
 
 def apply_threshold(
